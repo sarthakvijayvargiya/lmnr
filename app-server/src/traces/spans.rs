@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Result;
 use chrono::{TimeZone, Utc};
 use regex::Regex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -38,6 +38,14 @@ const OUTPUT_ATTRIBUTE_NAME: &str = "lmnr.span.output";
 /// null. We hackily use this when we wrap a span in a NonRecordingSpan that
 /// is not sent to the backend – this is done to overwrite trace IDs for spans.
 const OVERRIDE_PARENT_SPAN_ATTRIBUTE_NAME: &str = "lmnr.internal.override_parent_span";
+const TRACING_LEVEL_ATTRIBUTE_NAME: &str = "lmnr.internal.tracing_level";
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TracingLevel {
+    Off,
+    MetaOnly,
+}
 
 pub struct SpanAttributes {
     pub attributes: HashMap<String, Value>,
@@ -51,7 +59,7 @@ impl SpanAttributes {
     pub fn session_id(&self) -> Option<String> {
         match self
             .attributes
-            .get(format!("{ASSOCIATION_PROPERTIES_PREFIX}session_id").as_str())
+            .get(format!("{ASSOCIATION_PROPERTIES_PREFIX}.session_id").as_str())
         {
             Some(Value::String(s)) => Some(s.clone()),
             _ => None,
@@ -61,7 +69,7 @@ impl SpanAttributes {
     pub fn user_id(&self) -> Option<String> {
         match self
             .attributes
-            .get(format!("{ASSOCIATION_PROPERTIES_PREFIX}user_id").as_str())
+            .get(format!("{ASSOCIATION_PROPERTIES_PREFIX}.user_id").as_str())
         {
             Some(Value::String(s)) => Some(s.clone()),
             _ => None,
@@ -70,7 +78,7 @@ impl SpanAttributes {
 
     pub fn trace_type(&self) -> Option<TraceType> {
         self.attributes
-            .get(format!("{ASSOCIATION_PROPERTIES_PREFIX}trace_type").as_str())
+            .get(format!("{ASSOCIATION_PROPERTIES_PREFIX}.trace_type").as_str())
             .and_then(|s| serde_json::from_value(s.clone()).ok())
     }
 
@@ -123,7 +131,7 @@ impl SpanAttributes {
             if provider == "Langchain" {
                 let ls_provider = self
                     .attributes
-                    .get(format!("{ASSOCIATION_PROPERTIES_PREFIX}ls_provider").as_str())
+                    .get(format!("{ASSOCIATION_PROPERTIES_PREFIX}.ls_provider").as_str())
                     .and_then(|s| serde_json::from_value(s.clone()).ok());
                 if let Some(ls_provider) = ls_provider {
                     ls_provider
@@ -214,21 +222,32 @@ impl SpanAttributes {
     }
 
     pub fn metadata(&self) -> Option<HashMap<String, String>> {
-        let res = self.get_flattened_association_properties("metadata");
-        if res.is_empty() {
+        let mut metadata = self.get_flattened_association_properties("metadata");
+        let ai_sdk_metadata = self.get_flattened_properties("ai", "telemetry.metadata");
+        metadata.extend(ai_sdk_metadata);
+        if metadata.is_empty() {
             None
         } else {
             Some(
-                res.into_iter()
+                metadata
+                    .into_iter()
                     .map(|(k, v)| (k, json_value_to_string(v)))
                     .collect(),
             )
         }
     }
 
-    fn get_flattened_association_properties(&self, prefix: &str) -> HashMap<String, Value> {
+    fn get_flattened_association_properties(&self, entity: &str) -> HashMap<String, Value> {
+        self.get_flattened_properties(ASSOCIATION_PROPERTIES_PREFIX, entity)
+    }
+
+    fn get_flattened_properties(
+        &self,
+        attribute_prefix: &str,
+        entity: &str,
+    ) -> HashMap<String, Value> {
         let mut res = HashMap::new();
-        let prefix = format!("{ASSOCIATION_PROPERTIES_PREFIX}{prefix}.");
+        let prefix = format!("{attribute_prefix}.{entity}.");
         for (key, value) in self.attributes.iter() {
             if key.starts_with(&prefix) {
                 res.insert(
@@ -238,6 +257,12 @@ impl SpanAttributes {
             }
         }
         res
+    }
+
+    fn tracing_level(&self) -> Option<TracingLevel> {
+        self.attributes
+            .get(TRACING_LEVEL_ATTRIBUTE_NAME)
+            .and_then(|s| serde_json::from_value(s.clone()).ok())
     }
 }
 
@@ -251,6 +276,10 @@ impl Span {
 
     pub fn set_attributes(&mut self, attributes: &SpanAttributes) {
         self.attributes = serde_json::to_value(&attributes.attributes).unwrap();
+    }
+
+    pub fn should_save(&self) -> bool {
+        self.get_attributes().tracing_level() != Some(TracingLevel::Off)
     }
 
     /// Create a span from an OpenTelemetry span.
@@ -346,6 +375,16 @@ impl Span {
                 );
             }
         }
+
+        // Vercel AI SDK wraps "raw" LLM spans in an additional `ai.generateText` span.
+        // Which is not really an LLM span, but it has the prompt in its attributes.
+        // Set the input to the prompt.
+        if let Some(serde_json::Value::String(s)) = attributes.get("ai.prompt") {
+            span.input = Some(
+                serde_json::from_str::<Value>(s).unwrap_or(serde_json::Value::String(s.clone())),
+            );
+        }
+
         // If an LLM span is sent manually, we prefer `lmnr.span.input` and `lmnr.span.output`
         // attributes over gen_ai/vercel/LiteLLM attributes.
         // Therefore this block is outside and after the LLM span type check.
@@ -377,6 +416,11 @@ impl Span {
         // do that when we add a new span to a trace as a root span.
         if let Some(Value::Bool(true)) = attributes.get(OVERRIDE_PARENT_SPAN_ATTRIBUTE_NAME) {
             span.parent_span_id = None;
+        }
+
+        if let Some(TracingLevel::MetaOnly) = span.get_attributes().tracing_level() {
+            span.input = None;
+            span.output = None;
         }
 
         span
@@ -419,7 +463,7 @@ impl Span {
         };
         let mut attributes = HashMap::new();
         attributes.insert(
-            format!("{ASSOCIATION_PROPERTIES_PREFIX}trace_type",),
+            format!("{ASSOCIATION_PROPERTIES_PREFIX}.trace_type",),
             json!(trace_type),
         );
         attributes.insert(SPAN_PATH.to_string(), json!(path));
@@ -588,6 +632,12 @@ fn should_keep_attribute(attribute: &str) -> bool {
     let pattern =
         Regex::new(r"SpanAttributes\.LLM_(PROMPTS|COMPLETIONS)\.\d+\.(content|role)").unwrap();
     if pattern.is_match(attribute) {
+        return false;
+    }
+
+    // AI SDK
+    // remove ai.prompt.messages as it is stored in LLM span's input
+    if attribute == "ai.prompt.messages" {
         return false;
     }
 

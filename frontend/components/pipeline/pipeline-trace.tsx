@@ -1,7 +1,9 @@
 import { AiOutlineMinusCircle } from 'react-icons/ai';
-import PipelineInput from './pipeline-input';
-import { ScrollArea } from '../ui/scroll-area';
+
 import useStore from '@/lib/flow/store';
+
+import { ScrollArea } from '../ui/scroll-area';
+import PipelineInput from './pipeline-input';
 
 interface PipelineTraceProps {}
 
@@ -53,7 +55,8 @@ export default function PipelineTrace({}: PipelineTraceProps) {
               let inputNodes
 
               if (mode === PipelineExecutionMode.Node && focusedNodeId) {
-                inputNodes = Array.from(getRunGraph().nodes.values()).filter(node => node.type === NodeType.INPUT) as InputNode[];
+                inputNodes = Array.from(getRunGraph().nodes.values())
+                  .filter(node => node.type === NodeType.INPUT) as InputNode[];
               } else {
                 // Private pipelines will only come here if they are not in Unit test mode
                 // Public pipelines don't have Unit test mode and will always come here

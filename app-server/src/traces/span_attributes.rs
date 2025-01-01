@@ -25,9 +25,7 @@ pub const GEN_AI_INPUT_COST: &str = "gen_ai.usage.input_cost";
 pub const GEN_AI_OUTPUT_COST: &str = "gen_ai.usage.output_cost";
 
 // Custom lmnr attributes
-pub const ASSOCIATION_PROPERTIES_PREFIX: &str = "lmnr.association.properties.";
+pub const ASSOCIATION_PROPERTIES_PREFIX: &str = "lmnr.association.properties";
 pub const SPAN_TYPE: &str = "lmnr.span.type";
 pub const SPAN_PATH: &str = "lmnr.span.path";
-pub const EVENT_TYPE: &str = "lmnr.event.type";
-pub const EVENT_VALUE: &str = "lmnr.event.value";
 pub const LLM_NODE_RENDERED_PROMPT: &str = "lmnr.span.prompt";

@@ -1,17 +1,19 @@
 import '@/app/globals.css';
 
-import { Feature, isFeatureEnabled } from '@/lib/features/features';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { getServerSession } from 'next-auth';
 
+import PostHogClient from '@/app/posthog';
+import ProjectNavbar from '@/components/project/project-navbar';
+import ProjectUsageBanner from '@/components/project/usage-banner';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { ProjectContextProvider } from '@/contexts/project-context';
+import { UserContextProvider } from '@/contexts/user-context';
 import { authOptions } from '@/lib/auth';
+import { Feature, isFeatureEnabled } from '@/lib/features/features';
 import { fetcherJSON } from '@/lib/utils';
 import { GetProjectResponse } from '@/lib/workspaces/types';
-import { getServerSession } from 'next-auth';
-import PostHogClient from '@/app/posthog';
-import { ProjectContextProvider } from '@/contexts/project-context';
-import ProjectNavbarCollapsed from '@/components/project/project-navbar-collapsed';
-import ProjectUsageBanner from '@/components/project/usage-banner';
-import { redirect } from 'next/navigation';
-import { UserContextProvider } from '@/contexts/user-context';
 
 export default async function ProjectIdLayout({
   params,
@@ -47,6 +49,10 @@ export default async function ProjectIdLayout({
     distinctId: user.email ?? ''
   });
 
+  // getting the cookies for the sidebar state
+  const cookieStore = cookies();
+  const defaultOpen = cookieStore.get("sidebar:state") ? cookieStore.get("sidebar:state")?.value === "true" : true;
+
   return (
     <UserContextProvider
       email={user.email!}
@@ -56,22 +62,24 @@ export default async function ProjectIdLayout({
     >
       <ProjectContextProvider projectId={project.id} projectName={project.name}>
         <div className="flex flex-row max-w-full max-h-screen">
-          <div className="flex flex-col h-screen flex-shrink-0">
-            <ProjectNavbarCollapsed
-              projectId={projectId}
-              fullBuild={isFeatureEnabled(Feature.FULL_BUILD)}
-            />
-          </div>
-          <div className="flex flex-col flex-grow min-h-screen max-w-full h-screen overflow-y-auto">
-            {showBanner && (
-              <ProjectUsageBanner
-                workspaceId={project.workspaceId}
-                spansThisMonth={project.spansThisMonth}
-                spansLimit={project.spansLimit}
+          <SidebarProvider defaultOpen={defaultOpen}>
+            <div className="z-50 h-screen">
+              <ProjectNavbar
+                projectId={projectId}
+                fullBuild={isFeatureEnabled(Feature.FULL_BUILD)}
               />
-            )}
-            <div className="z-10 flex flex-col flex-grow">{children}</div>
-          </div>
+            </div>
+            <div className="flex flex-col flex-grow h-screen max-w-full min-h-screen overflow-y-auto">
+              {showBanner && (
+                <ProjectUsageBanner
+                  workspaceId={project.workspaceId}
+                  spansThisMonth={project.spansThisMonth}
+                  spansLimit={project.spansLimit}
+                />
+              )}
+              <div className="z-10 flex flex-col flex-grow ">{children}</div>
+            </div>
+          </SidebarProvider>
         </div>
       </ProjectContextProvider>
     </UserContextProvider>

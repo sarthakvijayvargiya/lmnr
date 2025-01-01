@@ -1,11 +1,8 @@
-import { addTimeRangeToQuery,AggregationFunction,aggregationFunctionToCh,TimeRange } from "./utils";
-import { Feature, isFeatureEnabled } from "../features/features";
-
 import { ClickHouseClient } from "@clickhouse/client";
-import { EvaluationTimeProgression } from "../evaluation/types";
 
-const DEFAULT_BUCKET_COUNT = 10;
-const DEFAULT_LOWER_BOUND = 0;
+import { EvaluationTimeProgression } from "../evaluation/types";
+import { Feature, isFeatureEnabled } from "../features/features";
+import { addTimeRangeToQuery, AggregationFunction, aggregationFunctionToCh, TimeRange } from "./utils";
 
 export const getEvaluationTimeProgression = async (
   clickhouseClient: ClickHouseClient,

@@ -1,5 +1,24 @@
 'use client';
 
+import { ColumnDef } from '@tanstack/react-table';
+import { Loader2, Trash2 } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { usePostHog } from 'posthog-js/react';
+import { useState } from 'react';
+import useSWR from 'swr';
+
+import { useProjectContext } from '@/contexts/project-context';
+import { useUserContext } from '@/contexts/user-context';
+import { AggregationFunction } from '@/lib/clickhouse/utils';
+import { Evaluation } from '@/lib/evaluation/types';
+import { Feature, isFeatureEnabled } from '@/lib/features/features';
+import { useToast } from '@/lib/hooks/use-toast';
+import { PaginatedResponse } from '@/lib/types';
+import { swrFetcher } from '@/lib/utils';
+
+import ClientTimestampFormatter from '../client-timestamp-formatter';
+import { Button } from '../ui/button';
+import { DataTable } from '../ui/datatable';
 import {
   Dialog,
   DialogContent,
@@ -9,29 +28,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '../ui/dialog';
-import { Feature, isFeatureEnabled } from '@/lib/features/features';
-import { Loader2, Trash2 } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { useRouter, useSearchParams } from 'next/navigation';
-
-import { AggregationFunction } from '@/lib/clickhouse/utils';
-import { Button } from '../ui/button';
-import ClientTimestampFormatter from '../client-timestamp-formatter';
-import { ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '../ui/datatable';
-import { Evaluation } from '@/lib/evaluation/types';
-import EvaluationsGroupsBar from './evaluations-groups-bar';
 import Header from '../ui/header';
 import Mono from '../ui/mono';
-import { PaginatedResponse } from '@/lib/types';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '../ui/resizable';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import EvaluationsGroupsBar from './evaluations-groups-bar';
 import ProgressionChart from './progression-chart';
-import { swrFetcher } from '@/lib/utils';
-import { usePostHog } from 'posthog-js/react';
-import { useProjectContext } from '@/contexts/project-context';
-import { useState } from 'react';
-import useSWR from 'swr';
-import { useToast } from '@/lib/hooks/use-toast';
-import { useUserContext } from '@/contexts/user-context';
 
 
 export default function Evaluations() {
@@ -146,49 +148,54 @@ export default function Evaluations() {
               </Select>
             </div>
           </div>
-          <ProgressionChart className="h-64 flex-none px-2" aggregationFunction={aggregationFunction} />
-          <div className="flex-grow">
-            <DataTable
-              enableRowSelection={true}
-              columns={columns}
-              data={evaluations}
-              onRowClick={(row) => {
-                router.push(`/project/${projectId}/evaluations/${row.original.id}`);
-              }}
-              getRowId={(row: Evaluation) => row.id}
-              paginated
-              manualPagination
-              selectionPanel={(selectedRowIds) => (
-                <div className="flex flex-col space-y-2">
-                  <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost">
-                        <Trash2 size={12} />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Delete Evaluations</DialogTitle>
-                        <DialogDescription>
-                          Are you sure you want to delete {selectedRowIds.length} evaluation(s)?
-                          This action cannot be undone.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
-                          Cancel
+          <ResizablePanelGroup direction="vertical">
+            <ResizablePanel className="flex-none px-2" minSize={15} defaultSize={20}>
+              <ProgressionChart className="h-full flex-none px-2" aggregationFunction={aggregationFunction} />
+            </ResizablePanel>
+            <ResizableHandle className="z-50" />
+            <ResizablePanel className="flex-grow" minSize={30}>
+              <DataTable
+                enableRowSelection={true}
+                columns={columns}
+                data={evaluations}
+                onRowClick={(row) => {
+                  router.push(`/project/${projectId}/evaluations/${row.original.id}`);
+                }}
+                getRowId={(row: Evaluation) => row.id}
+                paginated
+                manualPagination
+                selectionPanel={(selectedRowIds) => (
+                  <div className="flex flex-col space-y-2">
+                    <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost">
+                          <Trash2 size={12} />
                         </Button>
-                        <Button onClick={() => handleDeleteEvaluations(selectedRowIds)} disabled={isDeleting}>
-                          {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Delete
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              )}
-            />
-          </div>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Delete Evaluations</DialogTitle>
+                          <DialogDescription>
+                            Are you sure you want to delete {selectedRowIds.length} evaluation(s)?
+                            This action cannot be undone.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
+                            Cancel
+                          </Button>
+                          <Button onClick={() => handleDeleteEvaluations(selectedRowIds)} disabled={isDeleting}>
+                            {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Delete
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                )}
+              />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </div>
       </div>
     </div>

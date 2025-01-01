@@ -1,7 +1,7 @@
 use actix_service::Service;
 use actix_web::{
     middleware::{Logger, NormalizePath},
-    web::{self, PayloadConfig},
+    web::{self, JsonConfig, PayloadConfig},
     App, HttpMessage, HttpServer,
 };
 use actix_web_httpauth::middleware::HttpAuthentication;
@@ -74,6 +74,8 @@ mod storage;
 mod traces;
 
 const DEFAULT_CACHE_SIZE: u64 = 100; // entries
+const HTTP_PAYLOAD_LIMIT: usize = 100 * 1024 * 1024; // 100MB
+const GRPC_PAYLOAD_DECODING_LIMIT: usize = 100 * 1024 * 1024; // 100MB
 
 fn tonic_error_to_io_error(err: tonic::transport::Error) -> io::Error {
     io::Error::new(io::ErrorKind::Other, err)
@@ -89,7 +91,7 @@ fn main() -> anyhow::Result<()> {
     dotenv::dotenv().ok();
 
     let general_runtime =
-        create_general_purpose_runtime().expect("Can't optimizer general purpose runtime.");
+        create_general_purpose_runtime().expect("Can't initialize general purpose runtime.");
     let runtime_handle = general_runtime.handle().clone();
 
     let mut handles: Vec<JoinHandle<Result<(), Error>>> = vec![];
@@ -397,14 +399,15 @@ fn main() -> anyhow::Result<()> {
                         .service(
                             web::scope("/v1")
                                 .wrap(project_auth.clone())
+                                .app_data(PayloadConfig::new(HTTP_PAYLOAD_LIMIT))
+                                .app_data(JsonConfig::default().limit(HTTP_PAYLOAD_LIMIT))
                                 .service(api::v1::pipelines::run_pipeline_graph)
                                 .service(api::v1::pipelines::ping_healthcheck)
-                                .service(api::v1::traces::get_events_for_session)
                                 .service(api::v1::traces::process_traces)
                                 .service(api::v1::datasets::get_datapoints)
                                 .service(api::v1::evaluations::create_evaluation)
                                 .service(api::v1::metrics::process_metrics)
-                                .app_data(PayloadConfig::new(10 * 1024 * 1024)),
+                                .service(api::v1::semantic_search::semantic_search),
                         )
                         // Scopes with generic auth
                         .service(
@@ -493,10 +496,10 @@ fn main() -> anyhow::Result<()> {
                                         )
                                         .service(routes::datasets::delete_dataset)
                                         .service(routes::datasets::upload_datapoint_file)
-                                        .service(routes::datasets::create_datapoints)
+                                        .service(routes::datasets::create_datapoint_embeddings)
                                         .service(routes::datasets::get_datapoints)
-                                        .service(routes::datasets::update_datapoint_data)
-                                        .service(routes::datasets::delete_datapoints)
+                                        .service(routes::datasets::update_datapoint_embeddings)
+                                        .service(routes::datasets::delete_datapoint_embeddings)
                                         .service(routes::datasets::delete_all_datapoints)
                                         .service(routes::datasets::index_dataset)
                                         .service(routes::traces::get_traces)
@@ -513,12 +516,6 @@ fn main() -> anyhow::Result<()> {
                                             routes::labels::get_registered_label_classes_for_path,
                                         )
                                         .service(routes::labels::update_label_class)
-                                        .service(routes::events::get_event_templates)
-                                        .service(routes::events::get_event_template)
-                                        .service(routes::events::update_event_template)
-                                        .service(routes::events::delete_event_template)
-                                        .service(routes::events::get_events_by_template_id)
-                                        .service(routes::events::get_events_metrics)
                                         .service(routes::traces::get_traces_metrics)
                                         .service(routes::provider_api_keys::save_api_key),
                                 ),
@@ -543,7 +540,10 @@ fn main() -> anyhow::Result<()> {
                 );
 
                 Server::builder()
-                    .add_service(TraceServiceServer::new(process_traces_service))
+                    .add_service(
+                        TraceServiceServer::new(process_traces_service)
+                            .max_decoding_message_size(GRPC_PAYLOAD_DECODING_LIMIT),
+                    )
                     .serve_with_shutdown(grpc_address, async {
                         wait_stop_signal("gRPC service").await;
                     })

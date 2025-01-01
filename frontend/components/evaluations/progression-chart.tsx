@@ -1,16 +1,17 @@
+import { Minus } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "../ui/chart";
-import { cn, formatTimestamp, swrFetcher } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 
+import { useProjectContext } from "@/contexts/project-context";
 import { AggregationFunction } from "@/lib/clickhouse/utils";
 import { EvaluationTimeProgression } from "@/lib/evaluation/types";
+import { cn, formatTimestamp, swrFetcher } from "@/lib/utils";
+
+import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "../ui/chart";
 import { Label } from "../ui/label";
-import { Minus } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
-import { useProjectContext } from "@/contexts/project-context";
-import { useSearchParams } from "next/navigation";
-import useSWR from "swr";
 
 interface ProgressionChartProps {
   className?: string;
@@ -27,14 +28,7 @@ export default function ProgressionChart({
   const groupId = searchParams.get('groupId');
   const { projectId } = useProjectContext();
 
-  const convertScores = (progression: EvaluationTimeProgression[]) =>
-    progression.map(({ timestamp, evaluationId, names, values }) => ({
-      timestamp,
-      evaluationId,
-      ...Object.fromEntries(names.map((name, index) => ([name, values[index]]))),
-    }));
-
-  const { data, isLoading, error } = useSWR<EvaluationTimeProgression[]>(
+  const { data, error } = useSWR<EvaluationTimeProgression[]>(
     `/api/projects/${projectId}/evaluation-groups/${groupId}/progression?aggregate=${aggregationFunction}`,
     swrFetcher
   );
@@ -51,6 +45,14 @@ export default function ProgressionChart({
     }
   }, [data]);
 
+  const convertedScores = useMemo(() =>
+    data?.map(({ timestamp, evaluationId, names, values }) => ({
+      timestamp,
+      evaluationId,
+      ...Object.fromEntries(names.map((name, index) => ([name, values[index]]))),
+    })) ?? [], [data]
+  );
+
   const chartConfig = Object.fromEntries(Array.from(keys).map((key, index) => ([
     key, {
       color: `hsl(var(--chart-${index % 5 + 1}))`,
@@ -64,16 +66,16 @@ export default function ProgressionChart({
     <div className={cn('w-full h-full', className)}>
       <ChartContainer
         config={chartConfig as ChartConfig}
-        className={cn('h-56', 'w-full')}
+        className={cn('h-5/6', 'w-full')}
       >
-        {isLoading || !data || error ? (
+        {!data || error ? (
           <div className="h-full w-full">
             <Skeleton className="h-full w-full" />
           </div>
         ) : <LineChart
-          margin={{ top: 10, right: 10, bottom: 0, left: -24 }}
+          margin={{ top: 10, right: 10, bottom: 5, left: -12 }}
           accessibilityLayer
-          data={convertScores(data)}
+          data={convertedScores}
         >
           <CartesianGrid vertical={false} />
           <XAxis
@@ -81,7 +83,8 @@ export default function ProgressionChart({
             dataKey="timestamp"
             tickLine={false}
             axisLine={false}
-            tickFormatter={(value: number) => formatTimestamp(`${value}Z`)}
+            // tickFormatter={(value: number) => formatTimestamp(`${value}Z`)}
+            tick={false}
             height={8}
             padding={{ left: horizontalPadding, right: horizontalPadding }}
           />
@@ -93,7 +96,12 @@ export default function ProgressionChart({
           />
           <ChartTooltip
             cursor={false}
-            content={<ChartTooltipContent hideLabel className="min-w-60" />}
+            content={
+              <ChartTooltipContent
+                className="min-w-60"
+                labelFormatter={(value) => formatTimestamp(`${value}Z`)}
+              />
+            }
           />
           {Array.from(keys).filter((key) => showScores.includes(key)).map((key) => (
             <Line

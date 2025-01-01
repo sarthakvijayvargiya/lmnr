@@ -1,17 +1,18 @@
 'use client';
 
-import { Feature, isFeatureEnabled } from '@/lib/features/features';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-
+import { usePostHog } from 'posthog-js/react';
 import { Resizable } from 're-resizable';
+import { useEffect, useState } from 'react';
+
+import { useUserContext } from '@/contexts/user-context';
+import { Feature, isFeatureEnabled } from '@/lib/features/features';
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import SessionsTable from './sessions-table';
 import SpansTable from './spans-table';
-import TracesTable from './traces-table';
 import TraceView from './trace-view';
-import { usePostHog } from 'posthog-js/react';
-import { useUserContext } from '@/contexts/user-context';
+import TracesTable from './traces-table';
 
 enum SelectedTab {
   TRACES = 'traces',
@@ -66,11 +67,11 @@ export default function Traces() {
               <TabsTrigger value="traces">
                 Traces
               </TabsTrigger>
-              <TabsTrigger value="sessions">
-                Sessions
-              </TabsTrigger>
               <TabsTrigger value="spans">
                 Spans
+              </TabsTrigger>
+              <TabsTrigger value="sessions">
+                Sessions
               </TabsTrigger>
             </TabsList>
           </div>
@@ -82,7 +83,7 @@ export default function Traces() {
               <SessionsTable onRowClick={setTraceId} />
             </TabsContent>
             <TabsContent value="spans" className="w-full">
-              <SpansTable onRowClick={setTraceId}/>
+              <SpansTable onRowClick={setTraceId} />
             </TabsContent>
           </div>
         </Tabs>

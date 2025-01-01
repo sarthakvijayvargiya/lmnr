@@ -1,6 +1,21 @@
 'use client';
 
+import { ColumnDef } from '@tanstack/react-table';
+import { Loader2, Trash2 } from 'lucide-react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Resizable } from 're-resizable';
+import { useEffect, useState } from 'react';
+import useSWR from 'swr';
+
+import { Button } from '@/components/ui/button';
+import { DataTable } from '@/components/ui/datatable';
+import { useProjectContext } from '@/contexts/project-context';
 import { Datapoint, Dataset as DatasetType } from '@/lib/dataset/types';
+import { useToast } from '@/lib/hooks/use-toast';
+import { PaginatedResponse } from '@/lib/types';
+import { swrFetcher } from '@/lib/utils';
+
+import ClientTimestampFormatter from '../client-timestamp-formatter';
 import {
   Dialog,
   DialogContent,
@@ -10,25 +25,13 @@ import {
   DialogTitle,
   DialogTrigger
 } from '../ui/dialog';
-import { Loader2, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-
-import AddDatapointsDialog from './add-datapoints-dialog';
-import { Button } from '@/components/ui/button';
-import ClientTimestampFormatter from '../client-timestamp-formatter';
-import { ColumnDef } from '@tanstack/react-table';
-import DatasetPanel from './dataset-panel';
-import { DataTable } from '@/components/ui/datatable';
 import DownloadButton from '../ui/download-button';
 import Header from '../ui/header';
+import MonoWithCopy from '../ui/mono-with-copy';
+import AddDatapointsDialog from './add-datapoints-dialog';
+import DatasetPanel from './dataset-panel';
+import IndexDatasetDialog from './index-dataset-dialog';
 import ManualAddDatapoint from './manual-add-datapoint-dialog';
-import { PaginatedResponse } from '@/lib/types';
-import { Resizable } from 're-resizable';
-import { swrFetcher } from '@/lib/utils';
-import { useProjectContext } from '@/contexts/project-context';
-import useSWR from 'swr';
-import { useToast } from '@/lib/hooks/use-toast';
 
 interface DatasetProps {
   dataset: DatasetType;
@@ -40,9 +43,7 @@ export default function Dataset({ dataset }: DatasetProps) {
   const pathName = usePathname();
   const { projectId } = useProjectContext();
   const { toast } = useToast();
-  const [datapoints, setDatapoints] = useState<Datapoint[] | undefined>(
-    undefined
-  );
+  const [datapoints, setDatapoints] = useState<Datapoint[] | undefined>(undefined);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -69,7 +70,8 @@ export default function Dataset({ dataset }: DatasetProps) {
   const pageCount = Math.ceil(totalCount / pageSize);
 
   const { data, mutate } = useSWR<PaginatedResponse<Datapoint>>(
-    `/api/projects/${projectId}/datasets/${dataset.id}/datapoints?pageNumber=${pageNumber}&pageSize=${pageSize}`,
+    `/api/projects/${projectId}/datasets/${dataset.id}/datapoints` +
+    `?pageNumber=${pageNumber}&pageSize=${pageSize}`,
     swrFetcher
   );
 
@@ -115,7 +117,9 @@ export default function Dataset({ dataset }: DatasetProps) {
   const handleDeleteDatapoints = async (datapointIds: string[]) => {
     setIsDeleting(true);
     const response = await fetch(
-      `/api/projects/${projectId}/datasets/${dataset.id}/datapoints?datapointIds=${datapointIds.join(',')}`,
+      `/api/projects/${projectId}/datasets/${dataset.id}/datapoints` +
+      `?datapointIds=${datapointIds.join(',')}` +
+      (dataset.indexedOn ? `&indexedOn=${dataset.indexedOn}` : ''),
       {
         method: 'DELETE',
         headers: {
@@ -134,6 +138,10 @@ export default function Dataset({ dataset }: DatasetProps) {
         description: `Successfully deleted ${datapointIds.length} datapoint(s).`,
       });
       mutate();
+    }
+
+    if (selectedDatapoint && datapointIds.includes(selectedDatapoint.id)) {
+      handleDatapointSelect(null);
     }
 
     setIsDeleting(false);
@@ -166,13 +174,22 @@ export default function Dataset({ dataset }: DatasetProps) {
     <div className="h-full flex flex-col">
       <Header path={'datasets/' + dataset.name} />
       <div className="flex flex-none p-4 items-center space-x-4">
-        <div className="flex-grow text-2xl font-medium">
-          <h1>{dataset.name}</h1>
+        <div className="flex-grow flex items-center space-x-4">
+          <h1 className="text-2xl font-medium">{dataset.name}</h1>
+          <MonoWithCopy className="text-secondary-foreground pt-1">{dataset.id}</MonoWithCopy>
         </div>
+        <IndexDatasetDialog
+          datasetId={dataset.id}
+          defaultDataset={dataset}
+          onUpdate={() => {
+            mutate();
+            router.refresh();
+          }}
+        />
         <DownloadButton
           uri={`/api/projects/${projectId}/datasets/${dataset.id}/download`}
-          fileFormat="JSON"
-          filenameFallback={`${dataset.name.replace(/[^a-zA-Z0-9-_\.]/g, '_')}-${dataset.id}.json`}
+          supportedFormats={['csv', 'json']}
+          filenameFallback={`${dataset.name.replace(/[^a-zA-Z0-9-_\.]/g, '_')}-${dataset.id}`}
           variant="outline"
         />
         <AddDatapointsDialog datasetId={dataset.id} onUpdate={mutate} />
@@ -250,11 +267,12 @@ export default function Dataset({ dataset }: DatasetProps) {
             <div className="w-full h-full flex">
               <DatasetPanel
                 datasetId={dataset.id}
-                datapoint={selectedDatapoint}
+                datapointId={selectedDatapoint.id}
                 onClose={() => {
                   handleDatapointSelect(null);
                   mutate();
                 }}
+                indexedOn={dataset.indexedOn}
               />
             </div>
           </Resizable>

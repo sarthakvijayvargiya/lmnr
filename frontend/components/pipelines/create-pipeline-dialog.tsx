@@ -1,5 +1,10 @@
 'use client';
 
+import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -8,19 +13,15 @@ import {
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog';
-import { useEffect, useState } from 'react';
-
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
-import { Skeleton } from '../ui/skeleton';
-import { TemplateInfo } from '@/lib/pipeline/types';
-import TemplateSelect from './template-select';
 import { useProjectContext } from '@/contexts/project-context';
-import { useRouter } from 'next/navigation';
 import { useToast } from '@/lib/hooks/use-toast';
+import { TemplateInfo } from '@/lib/pipeline/types';
+import { cn } from '@/lib/utils';
+
+import { Skeleton } from '../ui/skeleton';
+import TemplateSelect from './template-select';
 
 interface CreatePipelineDialogProps {
   onUpdate?: () => void;
@@ -64,7 +65,8 @@ export function CreatePipelineDialog({ onUpdate }: CreatePipelineDialogProps) {
     });
 
     if (res.status !== 200) {
-      // Just a generic error message, since most likely the error has happened because the pipeline with the same name already exists.
+      // Just a generic error message, since most likely the error
+      // has happened because the pipeline with the same name already exists.
       toast({
         title: 'Error creating pipeline',
         description: 'Pipeline name must be unique in the project',

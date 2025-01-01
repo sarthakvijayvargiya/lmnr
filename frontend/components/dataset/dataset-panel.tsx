@@ -1,19 +1,22 @@
 import { ChevronsRight, Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import useSWR from 'swr';
 
-import { Button } from '../ui/button';
-import { Datapoint } from '@/lib/dataset/types';
-import Formatter from '../ui/formatter';
-import { Label } from '../ui/label';
-import Mono from '../ui/mono';
-import { ScrollArea } from '../ui/scroll-area';
-import { Skeleton } from '../ui/skeleton';
 import { useProjectContext } from '@/contexts/project-context';
 import { useToast } from '@/lib/hooks/use-toast';
+import { swrFetcher } from '@/lib/utils';
+
+import { Button } from '../ui/button';
+import Formatter from '../ui/formatter';
+import { Label } from '../ui/label';
+import MonoWithCopy from '../ui/mono-with-copy';
+import { ScrollArea } from '../ui/scroll-area';
+import { Skeleton } from '../ui/skeleton';
 
 interface DatasetPanelProps {
   datasetId: string;
-  datapoint: Datapoint;
+  indexedOn: string | null;
+  datapointId: string;
   onClose: () => void;
 }
 
@@ -21,17 +24,22 @@ const AUTO_SAVE_TIMEOUT_MS = 750;
 
 export default function DatasetPanel({
   datasetId,
-  datapoint,
+  indexedOn,
+  datapointId,
   onClose,
 }: DatasetPanelProps) {
   const { projectId } = useProjectContext();
+  const { data: datapoint, isLoading } = useSWR(
+    `/api/projects/${projectId}/datasets/${datasetId}/datapoints/${datapointId}`,
+    swrFetcher
+  );
   // datapoint is DatasetDatapoint, i.e. result of one execution on a data point
-  const [newData, setNewData] = useState<Record<string, any> | null>(datapoint.data);
+  const [newData, setNewData] = useState<Record<string, any> | null>(datapoint?.data);
   const [newTarget, setNewTarget] = useState<Record<string, any> | null>(
-    datapoint.target
+    datapoint?.target
   );
   const [newMetadata, setNewMetadata] = useState<Record<string, any> | null>(
-    datapoint.metadata
+    datapoint?.metadata
   );
   const [isValidJsonData, setIsValidJsonData] = useState(true);
   const [isValidJsonTarget, setIsValidJsonTarget] = useState(true);
@@ -49,7 +57,7 @@ export default function DatasetPanel({
     }
     setSaving(true);
     const res = await fetch(
-      `/api/projects/${projectId}/datasets/${datasetId}/datapoints/${datapoint.id}`,
+      `/api/projects/${projectId}/datasets/${datasetId}/datapoints/${datapointId}`,
       {
         method: 'POST',
         headers: {
@@ -58,7 +66,8 @@ export default function DatasetPanel({
         body: JSON.stringify({
           data: newData,
           target: newTarget,
-          metadata: newMetadata
+          metadata: newMetadata,
+          indexedOn
         })
       }
     );
@@ -88,16 +97,21 @@ export default function DatasetPanel({
   }, [newData, newTarget, newMetadata]);
 
   useEffect(() => {
+    if (!datapoint) return;
     setNewData(datapoint.data);
     setNewTarget(datapoint.target);
     setNewMetadata(datapoint.metadata);
   }, [datapoint]);
 
-  return (
+  return isLoading ? (<div className='p-4 space-y-2 h-full w-full'>
+    <Skeleton className="h-8" />
+    <Skeleton className="h-8" />
+    <Skeleton className="h-8" />
+  </div>) : (
     <div className="flex flex-col h-full w-full">
       <div className="h-12 flex flex-none space-x-2 px-3 items-center border-b">
         <Button
-          variant={'ghost'}
+          variant='ghost'
           className="px-1"
           onClick={async () => {
             await saveChanges();
@@ -107,7 +121,7 @@ export default function DatasetPanel({
           <ChevronsRight />
         </Button>
         <div>Row</div>
-        <Mono className="text-secondary-foreground mt-0.5">{datapoint.id}</Mono>
+        <MonoWithCopy className="text-secondary-foreground mt-0.5">{datapoint.id}</MonoWithCopy>
         {saving && <div className='flex text-secondary-foreground text-sm'>
           <Loader2 className="animate-spin h-4 w-4 mr-2 mt-0.5" />
           Saving

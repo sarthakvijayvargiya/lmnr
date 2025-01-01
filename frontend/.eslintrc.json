@@ -38,10 +38,15 @@
     "unused-imports/no-unused-imports": [
       "error"
     ],
-    "sort-imports": ["error", {
-      "ignoreCase": true,
-      "allowSeparatedGroups": false
-    }]
+    "simple-import-sort/imports": "error",
+    "simple-import-sort/exports": "error"
   },
-  "plugins": ["unused-imports"]
+  "parserOptions": {
+    "sourceType": "module",
+    "ecmaVersion": "latest"
+  },
+  "plugins": [
+    "unused-imports",
+    "simple-import-sort"
+  ]
 }

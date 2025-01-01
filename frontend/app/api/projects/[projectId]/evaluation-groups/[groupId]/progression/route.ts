@@ -1,8 +1,8 @@
-import { AggregationFunction, TimeRange } from "@/lib/clickhouse/utils";
 import { NextRequest, NextResponse } from "next/server";
 
 import { clickhouseClient } from "@/lib/clickhouse/client";
 import { getEvaluationTimeProgression } from "@/lib/clickhouse/evaluation-scores";
+import { AggregationFunction, TimeRange } from "@/lib/clickhouse/utils";
 
 
 export const GET = async (request: NextRequest, { params }: { params: { projectId: string, groupId: string } }) => {
@@ -16,7 +16,7 @@ export const GET = async (request: NextRequest, { params }: { params: { projectI
     const endDate = new Date(request.nextUrl.searchParams.get('endDate') ?? '');
     timeRange = { start: startDate, end: endDate };
   } else {
-    timeRange = { pastHours: 168 };
+    timeRange = { pastHours: 'all' };
   }
 
   const aggregationFunction = (request.nextUrl.searchParams.get('aggregate') ?? 'AVG') as AggregationFunction;

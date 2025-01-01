@@ -1,10 +1,23 @@
+import { PopoverClose } from '@radix-ui/react-popover';
 import {
   ChevronDown,
   Loader2,
   MoreVertical,
   Plus,
 } from 'lucide-react';
+import { useState } from 'react';
+import useSWR from 'swr';
+
+import { useProjectContext } from '@/contexts/project-context';
+import { toast } from '@/lib/hooks/use-toast';
+import {
+  LabelClass,
+  Span,
+} from '@/lib/traces/types';
 import { cn, swrFetcher } from '@/lib/utils';
+
+import { AddLabel } from '../traces/add-label';
+import { Button } from '../ui/button';
 import {
   Dialog,
   DialogContent,
@@ -20,10 +33,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu';
-import {
-  LabelClass,
-  Span,
-} from '@/lib/traces/types';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import {
   Table,
@@ -31,14 +40,6 @@ import {
   TableCell,
   TableRow
 } from '../ui/table';
-
-import { AddLabel } from '../traces/add-label';
-import { Button } from '../ui/button';
-import { PopoverClose } from '@radix-ui/react-popover';
-import { toast } from '@/lib/hooks/use-toast';
-import { useProjectContext } from '@/contexts/project-context';
-import { useState } from 'react';
-import useSWR from 'swr';
 
 interface LabelsProps {
   span: Span | undefined;
@@ -123,18 +124,20 @@ export function Labels({ span, onAddLabel }: LabelsProps) {
                       </PopoverTrigger>
                       <PopoverContent side="bottom" align="end">
                         <div className="flex flex-col space-y-2">
-                          {Object.entries(labelClass.valueMap).map(([key, value], index) => (
-                            <PopoverClose key={index}>
-                              <div
-                                onClick={() => {
-                                  onAddLabel(value, labelClass);
-                                }}
-                                className="cursor-pointer hover:bg-secondary-foreground/10 p-1 rounded border px-2"
-                              >
-                                {key}
-                              </div>
-                            </PopoverClose>
-                          ))}
+                          {Object.entries(labelClass.valueMap)
+                            .sort(([, valA], [_, valB]) => valA - valB)
+                            .map(([key, value], index) => (
+                              <PopoverClose key={index}>
+                                <div
+                                  onClick={() => {
+                                    onAddLabel(value, labelClass);
+                                  }}
+                                  className="cursor-pointer hover:bg-secondary-foreground/10 p-1 rounded border px-2"
+                                >
+                                  {key}
+                                </div>
+                              </PopoverClose>
+                            ))}
                         </div>
                       </PopoverContent>
                     </Popover>

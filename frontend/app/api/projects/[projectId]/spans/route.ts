@@ -1,10 +1,10 @@
-import { and, desc, eq, getTableColumns, inArray, sql } from 'drizzle-orm';
-import { FilterDef, filtersToSql } from '@/lib/db/modifiers';
-import { getDateRangeFilters, paginatedGet } from '@/lib/db/utils';
-import { labelClasses, labels, spans, traces } from '@/lib/db/migrations/schema';
+import { and, desc, eq, getTableColumns, inArray, or, sql } from 'drizzle-orm';
+import { NextRequest } from 'next/server';
 
 import { db } from '@/lib/db/drizzle';
-import { NextRequest } from 'next/server';
+import { labelClasses, labels, spans, traces } from '@/lib/db/migrations/schema';
+import { FilterDef, filtersToSql } from '@/lib/db/modifiers';
+import { getDateRangeFilters, paginatedGet } from '@/lib/db/utils';
 import { Span } from '@/lib/traces/types';
 
 export async function GET(
@@ -49,6 +49,14 @@ export async function GET(
           ))
       );
     });
+
+  const textSearch = req.nextUrl.searchParams.get("search");
+  const textSearchFilters = textSearch ? [
+    or(
+      sql`input::text LIKE ${`%${textSearch}%`}::text`,
+      sql`output::text LIKE ${`%${textSearch}%`}::text`
+    )!
+  ] : [];
 
   urlParamFilters = urlParamFilters
     // labels are handled separately above
@@ -103,7 +111,7 @@ export async function GET(
     sql`project_id = ${projectId}`
   ];
 
-  const filters = getDateRangeFilters(startTime, endTime, pastHours).concat(sqlFilters, labelFilters);
+  const filters = getDateRangeFilters(startTime, endTime, pastHours).concat(sqlFilters, labelFilters, textSearchFilters);
   // don't query input and output, only query previews
   const { input, output, ...columns } = getTableColumns(spans);
 

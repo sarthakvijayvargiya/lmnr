@@ -1,3 +1,11 @@
+import { Loader2 } from 'lucide-react';
+import { useCallback, useState } from 'react';
+
+import { useProjectContext } from '@/contexts/project-context';
+
+import { useToast } from '../../lib/hooks/use-toast';
+import { Button } from '../ui/button';
+import CodeEditor from '../ui/code-editor';
 import {
   Dialog,
   DialogContent,
@@ -6,13 +14,6 @@ import {
   DialogTitle,
   DialogTrigger
 } from '../ui/dialog';
-import { useCallback, useState } from 'react';
-
-import { Button } from '../ui/button';
-import CodeEditor from '../ui/code-editor';
-import { Loader2 } from 'lucide-react';
-import { useProjectContext } from '@/contexts/project-context';
-import { useToast } from '../../lib/hooks/use-toast';
 
 const DEFAULT_DATA = '{\n  "data": {},\n  "target": {}\n}';
 
@@ -106,7 +107,7 @@ export default function ManualAddDatapointDialog({
         </div>
         {!isValidJson() && (
           <div className="text-red-500">
-            Please enter a valid JSON map with a &dquote;data&dquote; field
+            Please enter a valid JSON map that has a {'"'}data{'"'} key
           </div>
         )}
         <DialogFooter className="mt-4">
